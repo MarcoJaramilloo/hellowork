@@ -32,7 +32,7 @@ pipeline {
                 bat 'echo %WORKSPACE%'
                 
                 // Aquí va tu comando real para pruebas unitarias. Ejemplo:
-                // bat 'pytest test/unit'
+                bat 'pytest test/unit'
             }
             post {
                 always {
@@ -54,7 +54,7 @@ pipeline {
                 bat 'echo %WORKSPACE%'
                 
                 // Aquí va tu comando real para pruebas REST. Ejemplo:
-                // bat 'pytest test/rest'
+                bat 'pytest test/rest'
             }
             post {
                 always {
