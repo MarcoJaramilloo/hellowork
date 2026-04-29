@@ -35,5 +35,35 @@ class TestApi(unittest.TestCase):
             response.read().decode(), "8", "ERROR SQRT"
         )
 
+    def test_api_multiply(self):
+        url = f"{BASE_URL}/calc/multiply/5/4"
+        response = urlopen(url, timeout=DEFAULT_TIMEOUT)
+        self.assertEqual(
+            response.status, http.client.OK, f"Error en la petición API a {url}"
+        )
+        self.assertEqual(
+            response.read().decode(), "20.0", "ERROR MULTIPLY"
+        )
+
+    def test_api_divide(self):
+        url = f"{BASE_URL}/calc/divide/10/2"
+        response = urlopen(url, timeout=DEFAULT_TIMEOUT)
+        self.assertEqual(
+            response.status, http.client.OK, f"Error en la petición API a {url}"
+        )
+        self.assertEqual(
+            response.read().decode(), "5.0", "ERROR DIVIDE"
+        )
+
+    def test_api_divide_by_zero_406(self):
+        # Esta es la prueba clave para el Reto 3
+        url = f"{BASE_URL}/calc/divide/10/0"
+        try:
+            urlopen(url, timeout=DEFAULT_TIMEOUT)
+            self.fail("Debería haber fallado con un error 406")
+        except Exception as e:
+            # Verificamos que el código devuelto sea exactamente 406
+            self.assertEqual(e.code, 406, "No se devolvió el código 406 esperado")
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
