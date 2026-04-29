@@ -49,10 +49,17 @@ pipeline {
                 bat 'whoami'
                 bat 'hostname'
                 
-                // Entramos a la carpeta y ejecutamos desde ahí
                 bat '''
                     cd helloworld-master
                     set PYTHONPATH=.
+                    
+                    :: 1. Lanzar la aplicación en segundo plano
+                    start /B python app/api.py
+                    
+                    :: 2. Esperar unos segundos a que la app arranque
+                    timeout /t 5 /nobreak > NUL
+                    
+                    :: 3. Ejecutar los tests
                     python -m pytest test/rest
                 '''
             }
