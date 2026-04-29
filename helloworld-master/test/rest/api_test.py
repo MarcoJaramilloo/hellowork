@@ -56,14 +56,16 @@ class TestApi(unittest.TestCase):
         )
 
     def test_api_divide_by_zero_406(self):
-        # Esta es la prueba clave para el Reto 3
         url = f"{BASE_URL}/calc/divide/10/0"
         try:
             urlopen(url, timeout=DEFAULT_TIMEOUT)
             self.fail("Debería haber fallado con un error 406")
         except Exception as e:
-            # Verificamos que el código devuelto sea exactamente 406
-            self.assertEqual(e.code, 406, "No se devolvió el código 406 esperado")
+            # Verificamos si es un error de HTTP (tiene código)
+            if hasattr(e, 'code'):
+                self.assertEqual(e.code, 406, "No se devolvió el código 406 esperado")
+            else:
+                self.fail(f"Se esperaba un error HTTP 406 pero se obtuvo: {e}")
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
