@@ -1,60 +1,60 @@
 pipeline {
-    // Ponemos "none" arriba porque asignaremos un agente específico a cada etapa
     agent none 
 
     stages {
         stage('Descarga de Codigo') {
-            // Se ejecuta en el nodo principal
             agent { label 'principal' } 
             steps {
+                deleteDir() // Limpia antes de descargar
                 checkout scm
                 
-                // Evidencia solicitada por la rúbrica
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
                 
-                // Empaquetamos todo el código fuente y lo llamamos 'codigo_fuente'
+                // Aseguramos que guardamos todo lo descargado
                 stash includes: '**/*', name: 'codigo_fuente'
             }
         }
         
         stage('Pruebas Unitarias') {
-            // Se ejecuta en el primer agente secundario
             agent { label 'agente-1' }
             steps {
-                // Desempaquetamos el código que nos pasó el nodo principal
+                deleteDir() // Limpia el agente antes de empezar
                 unstash 'codigo_fuente'
                 
-                // Evidencia
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
                 
-                // Aquí va tu comando real para pruebas unitarias. Ejemplo:
-                bat 'pytest test/unit'
+                // Muestra qué archivos llegaron al agente (diagnóstico)
+                bat 'dir' 
+                
+                // Comando más robusto para ejecutar pytest en Windows
+                bat 'python -m pytest test/unit'
             }
             post {
                 always {
-                    // Limpieza del workspace al terminar [cite: 620]
+                    // Mantenemos limpio el workspace al final
                     cleanWs() 
                 }
             }
         }
         
         stage('Pruebas de Integracion') {
-            // Se ejecuta en el segundo agente secundario
             agent { label 'agente-2' }
             steps {
+                deleteDir()
                 unstash 'codigo_fuente'
                 
-                // Evidencia
                 bat 'whoami'
                 bat 'hostname'
                 bat 'echo %WORKSPACE%'
                 
-                // Aquí va tu comando real para pruebas REST. Ejemplo:
-                bat 'pytest test/rest'
+                bat 'dir'
+                
+                // Ejecuta las pruebas de la API (Recuerda tener Wiremock en el 9090)
+                bat 'python -m pytest test/rest'
             }
             post {
                 always {
