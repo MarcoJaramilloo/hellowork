@@ -31,7 +31,7 @@ pipeline {
                 bat 'dir' 
                 
                 // Comando más robusto para ejecutar pytest en Windows
-                bat 'python -m pytest test/unit'
+                bat 'python -m pytest helloworld-master/test/unit'
             }
             post {
                 always {
@@ -54,7 +54,7 @@ pipeline {
                 bat 'dir'
                 
                 // Ejecuta las pruebas de la API (Recuerda tener Wiremock en el 9090)
-                bat 'python -m pytest test/rest'
+                bat 'python -m pytest helloworld-master/test/rest'
             }
             post {
                 always {
