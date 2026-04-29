@@ -45,24 +45,24 @@ pipeline {
             steps {
                 deleteDir()
                 unstash 'codigo_fuente'
+                
                 bat 'whoami'
                 
-                // Usamos PowerShell para lanzar la API de forma persistente
-                powershell '''
+                bat '''
                     cd helloworld-master
-                    $env:PYTHONPATH = "."
+                    set PYTHONPATH=.
                     
-                    # Lanzar la API sin bloquear Jenkins
-                    Start-Process python -ArgumentList "app/api.py" -WindowStyle Hidden
+                    :: Forzar el cierre de cualquier python previo para liberar el puerto 5000
+                    taskkill /F /IM python.exe /T > NUL 2>&1
                     
-                    # Esperar a que la API esté lista (15 segundos por seguridad)
-                    Start-Sleep -s 15
+                    :: Lanzar la API
+                    start /B python app/api.py
                     
-                    # Ejecutar los tests
+                    :: Esperar 15 segundos reales usando un ping al localhost (truco de Windows)
+                    ping 127.0.0.1 -n 15 > nul
+                    
+                    :: Ejecutar los tests
                     python -m pytest test/rest
-                    
-                    # Al terminar, cerramos el proceso de python para no dejar basura
-                    Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue
                 '''
             }
             post {
