@@ -17,25 +17,24 @@ pipeline {
             }
         }
         
-        stage('Pruebas Unitarias') {
+       stage('Pruebas Unitarias') {
             agent { label 'agente-1' }
             steps {
-                deleteDir() // Limpia el agente antes de empezar
+                deleteDir()
                 unstash 'codigo_fuente'
                 
                 bat 'whoami'
                 bat 'hostname'
-                bat 'echo %WORKSPACE%'
                 
-                // Muestra qué archivos llegaron al agente (diagnóstico)
-                bat 'dir' 
-                
-                // Comando más robusto para ejecutar pytest en Windows
-                bat 'python -m pytest helloworld-master/test/unit'
+                // Entramos a la carpeta y ejecutamos desde ahí
+                bat '''
+                    cd helloworld-master
+                    set PYTHONPATH=.
+                    python -m pytest test/unit
+                '''
             }
             post {
                 always {
-                    // Mantenemos limpio el workspace al final
                     cleanWs() 
                 }
             }
@@ -49,12 +48,13 @@ pipeline {
                 
                 bat 'whoami'
                 bat 'hostname'
-                bat 'echo %WORKSPACE%'
                 
-                bat 'dir'
-                
-                // Ejecuta las pruebas de la API (Recuerda tener Wiremock en el 9090)
-                bat 'python -m pytest helloworld-master/test/rest'
+                // Entramos a la carpeta y ejecutamos desde ahí
+                bat '''
+                    cd helloworld-master
+                    set PYTHONPATH=.
+                    python -m pytest test/rest
+                '''
             }
             post {
                 always {
