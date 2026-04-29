@@ -45,23 +45,24 @@ pipeline {
             steps {
                 deleteDir()
                 unstash 'codigo_fuente'
-                
                 bat 'whoami'
-                bat 'hostname'
                 
-                // Usamos un comando de Python para esperar, que es más fiable que 'timeout'
-                bat '''
+                // Usamos PowerShell para lanzar la API de forma persistente
+                powershell '''
                     cd helloworld-master
-                    set PYTHONPATH=.
+                    $env:PYTHONPATH = "."
                     
-                    :: Lanzar la app y redirigir logs para que no bloquee
-                    start /B python app/api.py > app_log.txt 2>&1
+                    # Lanzar la API sin bloquear Jenkins
+                    Start-Process python -ArgumentList "app/api.py" -WindowStyle Hidden
                     
-                    :: Esperar 10 segundos usando Python (más robusto)
-                    python -c "import time; time.sleep(10)"
+                    # Esperar a que la API esté lista (15 segundos por seguridad)
+                    Start-Sleep -s 15
                     
-                    :: Ejecutar los tests
+                    # Ejecutar los tests
                     python -m pytest test/rest
+                    
+                    # Al terminar, cerramos el proceso de python para no dejar basura
+                    Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue
                 '''
             }
             post {
