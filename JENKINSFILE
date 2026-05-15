@@ -4,15 +4,13 @@ pipeline {
     stages {
         stage('Get Code') {
             steps {
-                // Descarga el código del repositorio
                 checkout scm
             }
         }
 
         stage('Build') {
             steps {
-                echo 'Preparando el entorno de Python...'
-                // Mostramos el directorio para verificar que estamos en la raíz correcta
+                echo 'Preparando entorno...'
                 bat 'dir'
             }
         }
@@ -22,7 +20,6 @@ pipeline {
                 parallel(
                     "Unit": {
                         steps {
-                            // Pruebas unitarias
                             bat 'set PYTHONPATH=%WORKSPACE% && pytest --junitxml=result-unit.xml test/unit'
                         }
                     },
@@ -31,11 +28,9 @@ pipeline {
                             catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                                 bat '''
                                     set FLASK_APP=app\\api.py
-                                    :: Arranca Flask y Wiremock en segundo plano
                                     start /B flask run
                                     start /B java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir test\\wiremock
                                     
-                                    :: ESPERA CRÍTICA: 15 segundos para que los servicios levanten
                                     ping 127.0.0.1 -n 15 > nul
                                     
                                     set PYTHONPATH=%WORKSPACE%
@@ -50,25 +45,28 @@ pipeline {
 
         stage('Static Analysis (Flake8)') {
             steps {
-                // Análisis de estilo. Umbral: 8 fallos (Amarillo), 10 fallos (Rojo)
                 bat 'flake8 app --format=pylint > flake8.log || exit 0'
                 recordIssues tools: [flake8(pattern: 'flake8.log')], 
-                    unstableTotalAll: 8, failedTotalAll: 10
+                    qualityGates: [
+                        [threshold: 8, type: 'TOTAL', severity: 'WARNING'],
+                        [threshold: 10, type: 'TOTAL', severity: 'ERROR']
+                    ]
             }
         }
 
         stage('Security Test (Bandit)') {
             steps {
-                // Análisis de seguridad. Umbral: 2 fallos (Amarillo), 4 fallos (Rojo)
                 bat 'bandit -r app -f txt -o bandit.out || exit 0'
                 recordIssues tools: [bandit(pattern: 'bandit.out')], 
-                    unstableTotalAll: 2, failedTotalAll: 4
+                    qualityGates: [
+                        [threshold: 2, type: 'TOTAL', severity: 'WARNING'],
+                        [threshold: 4, type: 'TOTAL', severity: 'ERROR']
+                    ]
             }
         }
 
         stage('Coverage') {
             steps {
-                // Medición de cobertura de código
                 bat 'coverage run -m pytest test/unit'
                 bat 'coverage xml -o coverage.xml'
                 cobertura autoUpdateHealth: false, coberturaReportFile: 'coverage.xml',
@@ -78,7 +76,7 @@ pipeline {
 
         stage('Performance') {
             steps {
-                // Ejecución de JMeter. AJUSTA LA RUTA DE ABAJO SI TU JMETER ESTÁ EN OTRO LADO
+                // REVISA ESTA RUTA: Debe ser la de tu PC
                 bat 'D:\\apache-jmeter-5.6.3\\bin\\jmeter.bat -n -t test_plan.jmx -l results.jtl'
                 perfReport sourceDataFiles: 'results.jtl'
             }
@@ -87,9 +85,7 @@ pipeline {
 
     post {
         always {
-            // Publica los resultados de los tests para las gráficas de evolución
             junit 'result-unit.xml'
-            // Limpia el workspace para la siguiente ejecución
             cleanWs()
         }
     }
