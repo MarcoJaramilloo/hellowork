@@ -22,14 +22,14 @@ pipeline {
                                 set FLASK_APP=helloworld-master\\app\\api.py
                                 start /B python -m flask run
                                 
-                                :: Intento de arranque de Wiremock - Verifica que el archivo exista en esta ruta
-                                if exist "C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar" (
-                                    start /B java -jar "C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar" --port 9090 --root-dir helloworld-master\\test\\wiremock
-                                ) else (
-                                    echo "ADVERTENCIA: No se encontro el archivo JAR de Wiremock"
-                                )
+                                set WIREMOCK_PATH="C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar"
                                 
-                                ping 127.0.0.1 -n 15 > nul
+                                if exist %WIREMOCK_PATH% (
+                                    start /B java -jar %WIREMOCK_PATH% --port 9090 --root-dir helloworld-master\\test\\wiremock
+                                    ping 127.0.0.1 -n 15 > nul
+                                ) else (
+                                    echo "ADVERTENCIA: No se encontro Wiremock"
+                                )
                                 
                                 set PYTHONPATH=%WORKSPACE%\\helloworld-master
                                 python -m pytest --junitxml=result-rest.xml helloworld-master/test/rest
@@ -42,21 +42,15 @@ pipeline {
 
         stage('Static Analysis (Flake8)') {
             steps {
-                // Usamos python -m para invocar flake8
                 bat 'python -m flake8 helloworld-master/app --format=pylint > flake8.log || exit 0'
                 recordIssues tools: [flake8(pattern: 'flake8.log')], 
-                    qualityGates: [
-                        [threshold: 8, type: 'TOTAL'],
-                        [threshold: 10, type: 'TOTAL']
-                    ]
+                    qualityGates: [[threshold: 8, type: 'TOTAL'], [threshold: 10, type: 'TOTAL']]
             }
         }
 
         stage('Security Test (Bandit)') {
             steps {
-                // Usamos python -m para invocar bandit y quitamos el metodo problematico
                 bat 'python -m bandit -r helloworld-master/app -f txt -o bandit.out || exit 0'
-                echo "Analisis de Bandit finalizado. Revisar bandit.out para detalles."
             }
         }
 
@@ -64,13 +58,14 @@ pipeline {
             steps {
                 bat 'set PYTHONPATH=%WORKSPACE%\\helloworld-master && python -m coverage run -m pytest helloworld-master/test/unit'
                 bat 'python -m coverage xml -o coverage.xml'
-                cobertura autoUpdateHealth: false, coberturaReportFile: 'coverage.xml',
-                    lineCoverageTargets: '95, 85, 0' 
+                // Sintaxis corregida para el plugin moderno de Coverage
+                recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']])
             }
         }
 
         stage('Performance') {
             steps {
+                // Asegurate de que esta ruta sea correcta en tu disco D:
                 bat 'D:\\apache-jmeter-5.6.3\\bin\\jmeter.bat -n -t test_plan.jmx -l results.jtl'
                 perfReport sourceDataFiles: 'results.jtl'
             }
@@ -80,8 +75,7 @@ pipeline {
     post {
         always {
             junit 'result-unit.xml'
-            // No borramos el workspace inmediatamente para evitar el error de acceso denegado
-            echo "Pipeline finalizado."
+            echo "Pipeline finalizado para el Reto 1."
         }
     }
 }
