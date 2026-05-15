@@ -1,59 +1,96 @@
 pipeline {
     agent any
 
-     stages {
+    stages {
         stage('Get Code') {
             steps {
-                // Obtener código del repo
-                git 'https://github.com/anieto-unir/helloworld.git'
+                // Descarga el código del repositorio
+                checkout scm
             }
         }
 
-    stage('Build') {
-        steps {
-            echo 'Eyyyy, esto es Python. No hay que compilar nada!!!'
-	    echo WORKSPACE
-	    bat 'dir'
+        stage('Build') {
+            steps {
+                echo 'Preparando el entorno de Python...'
+                // Mostramos el directorio para verificar que estamos en la raíz correcta
+                bat 'dir'
+            }
         }
-    }
 
-    stage('Tests')
-    {
-        parallel {
-
-            stage('Unit') {
-                steps {
-                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                        bat '''
-                                set PYTHONPATH=%WORKSPACE%
-                                pytest --junitxml=result-unit.xml test\\unit
-                        '''
+        stage('Tests') {
+            steps {
+                parallel(
+                    "Unit": {
+                        steps {
+                            // Pruebas unitarias
+                            bat 'set PYTHONPATH=%WORKSPACE% && pytest --junitxml=result-unit.xml test/unit'
+                        }
+                    },
+                    "Rest": {
+                        steps {
+                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                                bat '''
+                                    set FLASK_APP=app\\api.py
+                                    :: Arranca Flask y Wiremock en segundo plano
+                                    start /B flask run
+                                    start /B java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir test\\wiremock
+                                    
+                                    :: ESPERA CRÍTICA: 15 segundos para que los servicios levanten
+                                    ping 127.0.0.1 -n 15 > nul
+                                    
+                                    set PYTHONPATH=%WORKSPACE%
+                                    pytest --junitxml=result-rest.xml test/rest
+                                '''
+                            }
+                        }
                     }
-                }
+                )
             }
-            
-            stage('Rest') {
-                steps {
-                    bat '''
-    set FLASK_APP=app\\api.py
-    start flask run
-    start java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir test\\wiremock
-    
-    :: Esperar 10 segundos para que los servicios arranquen
-    ping 127.0.0.1 -n 10 > nul
-    
-    set PYTHONPATH=%WORKSPACE%
-    pytest --junitxml=result-rest.xml test\\rest
-'''
-                }    
-            }    
+        }
+
+        stage('Static Analysis (Flake8)') {
+            steps {
+                // Análisis de estilo. Umbral: 8 fallos (Amarillo), 10 fallos (Rojo)
+                bat 'flake8 app --format=pylint > flake8.log || exit 0'
+                recordIssues tools: [flake8(pattern: 'flake8.log')], 
+                    unstableTotalAll: 8, failedTotalAll: 10
+            }
+        }
+
+        stage('Security Test (Bandit)') {
+            steps {
+                // Análisis de seguridad. Umbral: 2 fallos (Amarillo), 4 fallos (Rojo)
+                bat 'bandit -r app -f txt -o bandit.out || exit 0'
+                recordIssues tools: [bandit(pattern: 'bandit.out')], 
+                    unstableTotalAll: 2, failedTotalAll: 4
+            }
+        }
+
+        stage('Coverage') {
+            steps {
+                // Medición de cobertura de código
+                bat 'coverage run -m pytest test/unit'
+                bat 'coverage xml -o coverage.xml'
+                cobertura autoUpdateHealth: false, coberturaReportFile: 'coverage.xml',
+                    lineCoverageTargets: '95, 85, 0' 
+            }
+        }
+
+        stage('Performance') {
+            steps {
+                // Ejecución de JMeter. AJUSTA LA RUTA DE ABAJO SI TU JMETER ESTÁ EN OTRO LADO
+                bat 'D:\\apache-jmeter-5.6.3\\bin\\jmeter.bat -n -t test_plan.jmx -l results.jtl'
+                perfReport sourceDataFiles: 'results.jtl'
+            }
         }
     }
-    
-    stage ('Results') {
-        steps {
-            junit 'result*.xml'
+
+    post {
+        always {
+            // Publica los resultados de los tests para las gráficas de evolución
+            junit 'result-unit.xml'
+            // Limpia el workspace para la siguiente ejecución
+            cleanWs()
         }
     }
-  }
 }
