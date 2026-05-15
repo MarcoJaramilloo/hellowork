@@ -64,15 +64,8 @@ pipeline {
 
         stage('Performance') {
             steps {
-                script {
-                    // Definimos la ruta exacta con los parentesis de UNIR
-                    def jmeterExec = 'D:\\Universidad de la Rioja (UNIR)\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat'
-                    
-                    // Ejecutamos usando comillas triples para que Windows no procese los parentesis
-                    bat """
-                        call "${jmeterExec}" -n -t test_plan.jmx -l results.jtl
-                    """
-                }
+                // RUTA ACTUALIZADA SIN PARENTESIS
+                bat '"D:\\Universidad de la Rioja UNIR\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test_plan.jmx -l results.jtl'
                 perfReport sourceDataFiles: 'results.jtl'
             }
         }
@@ -81,7 +74,7 @@ pipeline {
     post {
         always {
             junit 'result-unit.xml'
-            echo "Pipeline finalizado para el Reto 1. ¡Revisa el Performance Report!"
+            echo "Pipeline finalizado Marco. ¡Ya puedes sacar tu reporte de Performance!"
         }
     }
 }
