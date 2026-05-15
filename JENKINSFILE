@@ -64,8 +64,8 @@ pipeline {
 
         stage('Performance') {
             steps {
-                // RUTA ACTUALIZADA SEGÚN TU ÚLTIMA CAPTURA
-                bat '"D:\\Universidad de la Rioja (UNIR)\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test_plan.jmx -l results.jtl'
+                // Solucion para rutas con espacios y parentesis en Windows
+                bat 'call "D:\\Universidad de la Rioja (UNIR)\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test_plan.jmx -l results.jtl'
                 perfReport sourceDataFiles: 'results.jtl'
             }
         }
