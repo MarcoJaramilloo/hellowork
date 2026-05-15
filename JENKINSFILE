@@ -58,15 +58,14 @@ pipeline {
             steps {
                 bat 'set PYTHONPATH=%WORKSPACE%\\helloworld-master && python -m coverage run -m pytest helloworld-master/test/unit'
                 bat 'python -m coverage xml -o coverage.xml'
-                // Sintaxis corregida para el plugin moderno de Coverage
                 recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']])
             }
         }
 
         stage('Performance') {
             steps {
-                // Asegurate de que esta ruta sea correcta en tu disco D:
-                bat 'D:\\apache-jmeter-5.6.3\\bin\\jmeter.bat -n -t test_plan.jmx -l results.jtl'
+                // RUTA ACTUALIZADA SEGÚN TU ÚLTIMA CAPTURA
+                bat '"D:\\Universidad de la Rioja (UNIR)\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test_plan.jmx -l results.jtl'
                 perfReport sourceDataFiles: 'results.jtl'
             }
         }
@@ -75,7 +74,7 @@ pipeline {
     post {
         always {
             junit 'result-unit.xml'
-            echo "Pipeline finalizado para el Reto 1."
+            echo "Pipeline finalizado con exito para el Reto 1."
         }
     }
 }
