@@ -8,32 +8,29 @@ pipeline {
             }
         }
 
-        stage('Build') {
-            steps {
-                echo 'Preparando entorno...'
-                bat 'dir'
-            }
-        }
-
         stage('Tests') {
             parallel {
                 stage('Unit') {
                     steps {
-                        bat 'set PYTHONPATH=%WORKSPACE% && pytest --junitxml=result-unit.xml test/unit'
+                        // Entramos a helloworld-master para ejecutar los tests
+                        bat 'set PYTHONPATH=%WORKSPACE%\\helloworld-master && pytest --junitxml=result-unit.xml helloworld-master/test/unit'
                     }
                 }
                 stage('Rest') {
                     steps {
                         catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                             bat '''
-                                set FLASK_APP=app\\api.py
+                                :: Ajustamos la ruta a la app de Flask
+                                set FLASK_APP=helloworld-master\\app\\api.py
                                 start /B flask run
-                                start /B java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir test\\wiremock
+                                
+                                :: ATENCION: Verifica que esta ruta al JAR sea real en tu disco C:
+                                start /B java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir helloworld-master\\test\\wiremock
                                 
                                 ping 127.0.0.1 -n 15 > nul
                                 
-                                set PYTHONPATH=%WORKSPACE%
-                                pytest --junitxml=result-rest.xml test/rest
+                                set PYTHONPATH=%WORKSPACE%\\helloworld-master
+                                pytest --junitxml=result-rest.xml helloworld-master/test/rest
                             '''
                         }
                     }
@@ -43,7 +40,8 @@ pipeline {
 
         stage('Static Analysis (Flake8)') {
             steps {
-                bat 'flake8 app --format=pylint > flake8.log || exit 0'
+                // Analizamos la carpeta app dentro de helloworld-master
+                bat 'flake8 helloworld-master/app --format=pylint > flake8.log || exit 0'
                 recordIssues tools: [flake8(pattern: 'flake8.log')], 
                     qualityGates: [
                         [threshold: 8, type: 'TOTAL', severity: 'WARNING'],
@@ -54,7 +52,7 @@ pipeline {
 
         stage('Security Test (Bandit)') {
             steps {
-                bat 'bandit -r app -f txt -o bandit.out || exit 0'
+                bat 'bandit -r helloworld-master/app -f txt -o bandit.out || exit 0'
                 recordIssues tools: [bandit(pattern: 'bandit.out')], 
                     qualityGates: [
                         [threshold: 2, type: 'TOTAL', severity: 'WARNING'],
@@ -65,7 +63,7 @@ pipeline {
 
         stage('Coverage') {
             steps {
-                bat 'coverage run -m pytest test/unit'
+                bat 'set PYTHONPATH=%WORKSPACE%\\helloworld-master && coverage run -m pytest helloworld-master/test/unit'
                 bat 'coverage xml -o coverage.xml'
                 cobertura autoUpdateHealth: false, coberturaReportFile: 'coverage.xml',
                     lineCoverageTargets: '95, 85, 0' 
@@ -74,7 +72,7 @@ pipeline {
 
         stage('Performance') {
             steps {
-                // REVISA ESTA RUTA: Debe ser la de tu PC
+                // Ejecuta el .jmx que está en la raíz
                 bat 'D:\\apache-jmeter-5.6.3\\bin\\jmeter.bat -n -t test_plan.jmx -l results.jtl'
                 perfReport sourceDataFiles: 'results.jtl'
             }
