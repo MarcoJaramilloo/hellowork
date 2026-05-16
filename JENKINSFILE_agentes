@@ -38,11 +38,11 @@ pipeline {
         }
 
         stage('Pruebas de Integracion') {
-            agent { label 'python-agent' }
+            agent { label 'python-agent' } // Forzamos agente-1 para evitar problemas de red
             steps {
                 deleteDir()
                 unstash 'codigo'
-                // catchError asegura que si falla el test REST por Wiremock, el pipeline siga avanzando
+                // catchError asegura que si falla Wiremock, el pipeline siga avanzando a Coverage
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     bat '''
                         echo "=== INFO AGENTE: INTEGRATION TESTS ==="
@@ -50,7 +50,7 @@ pipeline {
                         cd helloworld-master
                         set PYTHONPATH=.
                         
-                        :: Forzar el cierre de cualquier Flask previo para evitar bloqueos de puertos
+                        :: Forzar el cierre de cualquier Flask previo para evitar bloqueos de carpetas
                         taskkill /F /IM python.exe /T >NUL 2>&1 || exit 0
                         
                         :: Levantar la API en segundo plano
@@ -65,7 +65,7 @@ pipeline {
             post {
                 always {
                     bat '''
-                        :: SOLUCION CRITICA: Matamos el proceso de Flask para liberar los archivos antes de limpiar
+                        :: Forzar cierre del proceso Flask zombi para liberar el Workspace en Windows
                         taskkill /F /IM python.exe /T >NUL 2>&1 || exit 0
                     '''
                     cleanWs()
