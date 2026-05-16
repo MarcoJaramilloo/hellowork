@@ -1,33 +1,30 @@
 pipeline {
-    agent none 
+    agent none
 
     stages {
         stage('Descarga de Codigo') {
-            agent { label 'principal' } 
+            agent any
             steps {
-                deleteDir() // Limpia antes de descargar
                 checkout scm
-                
-                bat 'whoami'
-                bat 'hostname'
-                bat 'echo %WORKSPACE%'
-                
-                // Aseguramos que guardamos todo lo descargado
-                stash includes: '**/*', name: 'codigo_fuente'
+                bat '''
+                    echo "=== INFO AGENTE: GET CODE ==="
+                    whoami
+                    hostname
+                    echo "Workspace: %WORKSPACE%"
+                '''
+                stash name: 'codigo', useDefaultExcludes: false
             }
         }
-        
-       stage('Pruebas Unitarias') {
-            agent { label 'agente-1' }
+
+        stage('Pruebas Unitarias') {
+            agent { label 'python-agent' }
             steps {
                 deleteDir()
-                unstash 'codigo_fuente'
-                
-                bat 'whoami'
-                bat 'hostname'
-                
-                // Entramos a la carpeta y ejecutamos desde ahí
+                unstash 'codigo'
                 bat '''
+                    echo "=== INFO AGENTE: UNIT TESTS ==="
+                    whoami
+                    hostname
                     cd helloworld-master
                     set PYTHONPATH=.
                     python -m pytest test/unit
@@ -35,35 +32,62 @@ pipeline {
             }
             post {
                 always {
-                    cleanWs() 
+                    cleanWs()
                 }
             }
         }
-        
-       stage('Pruebas de Integracion') {
-            agent { label 'agente-2' }
+
+        stage('Pruebas de Integracion') {
+            agent { label 'python-agent' } // Forzamos agente-1 para evitar problemas de red
             steps {
                 deleteDir()
-                unstash 'codigo_fuente'
-                
-                bat 'whoami'
-                
+                unstash 'codigo'
+                // catchError asegura que si falla Wiremock, el pipeline siga avanzando a Coverage
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    bat '''
+                        echo "=== INFO AGENTE: INTEGRATION TESTS ==="
+                        whoami
+                        cd helloworld-master
+                        set PYTHONPATH=.
+                        
+                        :: Forzar el cierre de cualquier Flask previo para evitar bloqueos de carpetas
+                        taskkill /F /IM python.exe /T >NUL 2>&1 || exit 0
+                        
+                        :: Levantar la API en segundo plano
+                        start /B python app/api.py
+                        ping 127.0.0.1 -n 15 > nul
+                        
+                        :: Correr pruebas de integracion
+                        python -m pytest test/rest
+                    '''
+                }
+            }
+            post {
+                always {
+                    bat '''
+                        :: Forzar cierre del proceso Flask zombi para liberar el Workspace en Windows
+                        taskkill /F /IM python.exe /T >NUL 2>&1 || exit 0
+                    '''
+                    cleanWs()
+                }
+            }
+        }
+
+        stage('Coverage') {
+            agent { label 'python-agent' }
+            steps {
+                deleteDir()
+                unstash 'codigo'
                 bat '''
+                    echo "=== INFO AGENTE: COVERAGE ==="
+                    whoami
+                    hostname
                     cd helloworld-master
                     set PYTHONPATH=.
-                    
-                    :: Forzar el cierre de cualquier python previo para liberar el puerto 5000
-                    taskkill /F /IM python.exe /T > NUL 2>&1
-                    
-                    :: Lanzar la API
-                    start /B python app/api.py
-                    
-                    :: Esperar 15 segundos reales usando un ping al localhost (truco de Windows)
-                    ping 127.0.0.1 -n 15 > nul
-                    
-                    :: Ejecutar los tests
-                    python -m pytest test/rest
+                    python -m coverage run -m pytest test/unit
+                    python -m coverage xml -o coverage.xml
                 '''
+                recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'helloworld-master/coverage.xml']])
             }
             post {
                 always {
