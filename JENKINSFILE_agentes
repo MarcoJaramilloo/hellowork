@@ -105,7 +105,7 @@ pipeline {
                     echo "Workspace: %WORKSPACE%"
                 '''
                 // RUTA SIN PARÉNTESIS DE TU CONFIGURACIÓN ACTUALIZADA
-                bat '"D:\\Universidad de la Rioja UNIR\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test_plan.jmx -l results.jtl'
+                bat '"D:\\UniversidaddelaRiojaUNIR\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test_plan.jmx -l results.jtl'
                 perfReport sourceDataFiles: 'results.jtl'
             }
         }
