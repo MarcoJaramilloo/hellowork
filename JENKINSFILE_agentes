@@ -7,9 +7,10 @@ pipeline {
             steps {
                 checkout scm
                 bat '''
+                    echo "=== INFO AGENTE: GET CODE ==="
                     whoami
                     hostname
-                    echo %WORKSPACE%
+                    echo "Workspace: %WORKSPACE%"
                 '''
                 stash name: 'codigo', useDefaultExcludes: false
             }
@@ -21,6 +22,7 @@ pipeline {
                 deleteDir()
                 unstash 'codigo'
                 bat '''
+                    echo "=== INFO AGENTE: UNIT TESTS ==="
                     whoami
                     hostname
                     cd helloworld-master
@@ -38,23 +40,34 @@ pipeline {
         stage('Pruebas de Integracion') {
             agent { label 'python-agent' }
             steps {
-                // Capturamos el error para que el pipeline continue hacia la etapa de Coverage
+                deleteDir()
+                unstash 'codigo'
+                // catchError asegura que si falla el test REST por Wiremock, el pipeline siga avanzando
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                    deleteDir()
-                    unstash 'codigo'
                     bat '''
+                        echo "=== INFO AGENTE: INTEGRATION TESTS ==="
                         whoami
                         cd helloworld-master
                         set PYTHONPATH=.
+                        
+                        :: Forzar el cierre de cualquier Flask previo para evitar bloqueos de puertos
                         taskkill /F /IM python.exe /T >NUL 2>&1 || exit 0
+                        
+                        :: Levantar la API en segundo plano
                         start /B python app/api.py
                         ping 127.0.0.1 -n 15 > nul
+                        
+                        :: Correr pruebas de integracion
                         python -m pytest test/rest
                     '''
                 }
             }
             post {
                 always {
+                    bat '''
+                        :: SOLUCION CRITICA: Matamos el proceso de Flask para liberar los archivos antes de limpiar
+                        taskkill /F /IM python.exe /T >NUL 2>&1 || exit 0
+                    '''
                     cleanWs()
                 }
             }
@@ -66,6 +79,7 @@ pipeline {
                 deleteDir()
                 unstash 'codigo'
                 bat '''
+                    echo "=== INFO AGENTE: COVERAGE ==="
                     whoami
                     hostname
                     cd helloworld-master
@@ -73,7 +87,6 @@ pipeline {
                     python -m coverage run -m pytest test/unit
                     python -m coverage xml -o coverage.xml
                 '''
-                // Registramos la cobertura en el Workspace principal
                 recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'helloworld-master/coverage.xml']])
             }
             post {
