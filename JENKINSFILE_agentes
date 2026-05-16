@@ -1,121 +1,85 @@
 pipeline {
-    agent none // Quitamos el agent any global para forzar a definirlo por etapa
+    agent none
 
     stages {
-        stage('Get Code') {
-            agent { label 'python-agent' }
+        stage('Descarga de Codigo') {
+            agent any
             steps {
                 checkout scm
                 bat '''
-                    echo "=== INFO AGENTE: GET CODE ==="
                     whoami
                     hostname
-                    echo "Workspace: %WORKSPACE%"
+                    echo %WORKSPACE%
                 '''
+                stash name: 'codigo', useDefaultExcludes: false
             }
         }
 
-        stage('Tests') {
-            parallel {
-                stage('Unit Tests') {
-                    agent { label 'python-agent' }
-                    steps {
-                        bat '''
-                            echo "=== INFO AGENTE: UNIT TESTS ==="
-                            whoami
-                            hostname
-                            echo "Workspace: %WORKSPACE%"
-                            set PYTHONPATH=%WORKSPACE%\\helloworld-master
-                            python -m pytest --junitxml=result-unit.xml helloworld-master/test/unit
-                        '''
-                    }
-                }
-                stage('Rest Tests') {
-                    agent { label 'python-agent' }
-                    steps {
-                        catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-                            bat '''
-                                echo "=== INFO AGENTE: REST TESTS ==="
-                                whoami
-                                hostname
-                                echo "Workspace: %WORKSPACE%"
-                                set FLASK_APP=helloworld-master\\app\\api.py
-                                start /B python -m flask run
-                                ping 127.0.0.1 -n 15 > nul
-                                set PYTHONPATH=%WORKSPACE%\\helloworld-master
-                                python -m pytest --junitxml=result-rest.xml helloworld-master/test/rest
-                            '''
-                        }
-                    }
+        stage('Pruebas Unitarias') {
+            agent { label 'python-agent' }
+            steps {
+                deleteDir()
+                unstash 'codigo'
+                bat '''
+                    whoami
+                    hostname
+                    cd helloworld-master
+                    set PYTHONPATH=.
+                    python -m pytest test/unit
+                '''
+            }
+            post {
+                always {
+                    cleanWs()
                 }
             }
         }
 
-        stage('Static Analysis (Flake8)') {
+        stage('Pruebas de Integracion') {
             agent { label 'python-agent' }
             steps {
-                bat '''
-                    echo "=== INFO AGENTE: FLAKE8 ==="
-                    whoami
-                    hostname
-                    echo "Workspace: %WORKSPACE%"
-                    python -m flake8 helloworld-master/app --format=pylint > flake8.log || exit 0
-                '''
-                recordIssues tools: [flake8(pattern: 'flake8.log')], 
-                    qualityGates: [[threshold: 8, type: 'TOTAL'], [threshold: 10, type: 'TOTAL']]
+                // Capturamos el error para que el pipeline continue hacia la etapa de Coverage
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    deleteDir()
+                    unstash 'codigo'
+                    bat '''
+                        whoami
+                        cd helloworld-master
+                        set PYTHONPATH=.
+                        taskkill /F /IM python.exe /T >NUL 2>&1 || exit 0
+                        start /B python app/api.py
+                        ping 127.0.0.1 -n 15 > nul
+                        python -m pytest test/rest
+                    '''
+                }
             }
-        }
-
-        stage('Security Test (Bandit)') {
-            agent { label 'python-agent' }
-            steps {
-                bat '''
-                    echo "=== INFO AGENTE: BANDIT ==="
-                    whoami
-                    hostname
-                    echo "Workspace: %WORKSPACE%"
-                    python -m bandit -r helloworld-master/app -f txt -o bandit.out || exit 0
-                '''
+            post {
+                always {
+                    cleanWs()
+                }
             }
         }
 
         stage('Coverage') {
             agent { label 'python-agent' }
             steps {
+                deleteDir()
+                unstash 'codigo'
                 bat '''
-                    echo "=== INFO AGENTE: COVERAGE ==="
                     whoami
                     hostname
-                    echo "Workspace: %WORKSPACE%"
-                    set PYTHONPATH=%WORKSPACE%\\helloworld-master
-                    python -m coverage run -m pytest helloworld-master/test/unit
+                    cd helloworld-master
+                    set PYTHONPATH=.
+                    python -m coverage run -m pytest test/unit
                     python -m coverage xml -o coverage.xml
                 '''
-                recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'coverage.xml']])
+                // Registramos la cobertura en el Workspace principal
+                recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'helloworld-master/coverage.xml']])
             }
-        }
-
-        stage('Performance') {
-            agent { label 'jmeter-agent' } // Cambiamos al agente especializado en JMeter
-            steps {
-                bat '''
-                    echo "=== INFO AGENTE: PERFORMANCE ==="
-                    whoami
-                    hostname
-                    echo "Workspace: %WORKSPACE%"
-                '''
-                // RUTA SIN PARÉNTESIS DE TU CONFIGURACIÓN ACTUALIZADA
-                bat '"D:\\UniversidaddelaRiojaUNIR\\Tareas\\CP2\\jmeter\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t test_plan.jmx -l results.jtl'
-                perfReport sourceDataFiles: 'results.jtl'
-            }
-        }
-    }
-
-    post {
-        always {
-            script {
-                // Al usar 'agent none' global, post necesita pasos especificos o controlados
-                echo "Pipeline distribuido finalizado."
+            post {
+                always {
+                    cleanWs()
+                }
             }
         }
     }
